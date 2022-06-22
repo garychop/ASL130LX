@@ -20,31 +20,26 @@
  */
 
 /* 
- * File:   AnalogInput.h
- * Author: G. Chopcinski
- * Comments: Defines the usable external calls.
- * Revision history: June 21, 2022
+ * File:   UserButton.h
+ * Author: G. Chopcinski, Kg Solutions, LLC
+ * Created for ASL
+ * Comments: ASL130LX project
+ * Revision history:
+ *      June 22, 2022, GC, Created
  */
 
 // This is a guard condition so that contents of this file are not included
 // more than once.  
-#ifndef ANALOG_INPUT_H
-#define	ANALOG_INPUT_H
+#ifndef USER_BUTTON_H
+#define	USER_BUTTON_H
 
 #include <xc.h> // include processor files - each processor file is guarded.  
 #include <stdint.h>
 #include <stdbool.h>
 
-#define NEUTRAL_JOYSTICK_INPUT (0x202)
-#define NEUTRAL_ERROR_MARGIN (0x10)     // The amount of deviation from the Neutral
-#define JOYSTICK_RAW_MAX_DEFLECTION (220)   // This is the max that the joystick 
-                                        // .. input can deviate from neutral.
+void Read_User_Buttons(void);
+void UserButton_Init(void);
+bool IsCalibrationButtonActive (void);
 
-void AnalogInputInit(void);
-uint16_t ReadSpeed (void);
-uint16_t ReadDirection (void);
-void GetSpeedAndDirection (uint16_t *speed, uint16_t *direction);
-bool IsJoystickInNeutral (void);
-    
-#endif	/* ANALOG_INPUT_H */
+#endif	/* USER_BUTTON_H */
 

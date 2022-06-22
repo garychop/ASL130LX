@@ -106,3 +106,26 @@ void GetSpeedAndDirection (uint16_t *speed, uint16_t *direction)
     //*direction = 0x204;
 }
 
+//------------------------------------------------------------------------------
+// This function returns "true" if the joystick signals are within the Neutral
+// window else returns "false".
+//------------------------------------------------------------------------------
+bool IsJoystickInNeutral ()
+{
+    uint16_t rawSpeed, rawDirection; 
+    
+    GetSpeedAndDirection (&rawSpeed, &rawDirection);
+    
+    if ((rawSpeed < (NEUTRAL_JOYSTICK_INPUT + NEUTRAL_ERROR_MARGIN))
+    && (rawSpeed > (NEUTRAL_JOYSTICK_INPUT - NEUTRAL_ERROR_MARGIN))
+    && (rawDirection < (NEUTRAL_JOYSTICK_INPUT + NEUTRAL_ERROR_MARGIN))
+    && (rawDirection > (NEUTRAL_JOYSTICK_INPUT - NEUTRAL_ERROR_MARGIN)))
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+

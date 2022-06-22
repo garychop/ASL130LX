@@ -23,6 +23,7 @@
 #include "dac_bsp.h"
 #include "eeprom_bsp.h"
 #include "AnalogInput.h"
+#include "UserButton.h"
 
 /* ******************************   Macros   ****************************** */
 
@@ -32,27 +33,32 @@
 #define MAX_DAC_OUTPUT (1700)           // 2.54 Volts * 0.00146 volts / bit
 #define MIN_DAC_OUTPUT (520)            // 0.76 Volts * 0.00146 volts / bit
 
-#define NEUTRAL_JOYSTICK_INPUT (0x202)
-#define NEUTRAL_ERROR_MARGIN (0x10)     // The amount of deviation from the Neutral
-#define JOYSTICK_RAW_MAX_DEFLECTION (220)   // This is the max that the joystick 
-                                        // .. input can deviate from neutral.
 
 enum JOYSTICK_CHANNEL_ENUM {SPEED_ARRAY, DIRECTION_ARRAY, NUM_JS_POTS};
 
 enum STATE_ENUM {
     NO_STATE = 0,
     POWERUP_STATE,
+    ENTER_DRIVING_STATE,
     DRIVING_STATE,
     BLUETOOTH_STATE,
-    CALIBRATION_STATE,
+    ENTER_CALIBRATION_STATE,
+    DO_JOYSTICK_CALIBRATION_STATE,
+    EXIT_JOYSTICK_CALIBRATION_STATE,
 }  gp_State;
 
 /* ***********************   Function Prototypes   ************************ */
 
-static void DriveDemand (void);
+static void EnterDrivingState (void);
+static void DrivingState (void);
 static void BluetoothControl (void);
+static void EstablishJoystickNeutral(void);
+static void EnterCalibrationState(void);
+static void JoystickCalibrationState(void);
+static void ExitCalibrationState(void);
+
 static void SetTPI_Demands (uint16_t speedDemand, uint16_t directionDemand);
-static void GetJoystickNeutral(void);
+void InitializeJoystickData ();
 
 /* ***********************   Global Variables ***************************** */
 
@@ -67,6 +73,8 @@ typedef struct
     uint16_t m_rawNeutral;
     uint16_t m_rawMinNeutral;
     uint16_t m_rawMaxNuetral;
+    uint16_t m_rawMinLimit;
+    uint16_t m_rawMaxLimit;
 } JOYSTICK_STRUCT;
 JOYSTICK_STRUCT Joystick_Data[NUM_JS_POTS];
 
@@ -82,19 +90,8 @@ int main (void)
     dacBspInit();
     eepromBspInit();
     AnalogInputInit();
-
-#ifdef WEBEREADINTHEEEPROMP    
-    // Try reading the EEPROM
-    eepromStatus = false;
-    eepromBspWriteByte (0, 0xde, 100);
-    eepromBspWriteByte (1, 0xad, 100);
-    eepromStatus = eepromBspReadSection (0, 1, &xVal, 100);
-    eepromStatus = eepromBspReadSection (1, 1, &yVal, 100);
-    eepromBspWriteByte (0, 0xaa, 100);
-    eepromBspWriteByte (1, 0x55, 100);
-    eepromStatus = eepromBspReadSection (0, 1, &xVal, 100);
-    eepromStatus = eepromBspReadSection (1, 1, &yVal, 100);
-#endif
+    InitializeJoystickData();
+    
     dacBspSet (DAC_SELECT_FORWARD_BACKWARD, NEUTRAL_DEMAND_OUTPUT);
     dacBspSet (DAC_SELECT_LEFT_RIGHT, NEUTRAL_DEMAND_OUTPUT);
 
@@ -104,7 +101,10 @@ int main (void)
     // Announce the startup
 //    TurnBeeper(BEEPER_ON);
     for (i = 0; i < 50; ++i)
+    {
+        Read_User_Buttons();  // Get and debounce the User Buttons.
         bspDelayUs (US_DELAY_500_us);
+    }
     TurnBeeper(BEEPER_OFF);
     
     dacBspSet (DAC_SELECT_FORWARD_BACKWARD, NEUTRAL_DEMAND_OUTPUT);
@@ -114,22 +114,34 @@ int main (void)
     
     while (1)
     {
-        
+        Read_User_Buttons();  // Get and debounce the User Buttons.
+
         switch (gp_State)
         {
             case POWERUP_STATE:
-                GetJoystickNeutral();
+                EstablishJoystickNeutral();
+                break;
+            case ENTER_DRIVING_STATE:
+                EnterDrivingState();
                 break;
             case DRIVING_STATE:
-                DriveDemand();
+                DrivingState();
                 break;
             case BLUETOOTH_STATE:
                 break;
-            case CALIBRATION_STATE:
+            case ENTER_CALIBRATION_STATE:
+                EnterCalibrationState();
+                break;
+            case DO_JOYSTICK_CALIBRATION_STATE:
+                JoystickCalibrationState();
+                break;
+            case EXIT_JOYSTICK_CALIBRATION_STATE:
+                ExitCalibrationState();
                 break;
             default:
                 break;
         }
+        bspDelayUs (US_DELAY_200_us);
     }
 }
 
@@ -138,19 +150,14 @@ int main (void)
 // joystick's input Upper and Lower Limits.
 //------------------------------------------------------------------------------
 
-static void GetJoystickNeutral(void)
+static void EstablishJoystickNeutral(void)
 {
     uint16_t speed, direction;
     
-    // Get the Speed and Direction
-    GetSpeedAndDirection (&speed, &direction);
-        
-    // Check for the Speed and Direction Analog Inputs to be in the Neutral Window
-    if ((speed < (NEUTRAL_JOYSTICK_INPUT + NEUTRAL_ERROR_MARGIN))
-    && (speed > (NEUTRAL_JOYSTICK_INPUT - NEUTRAL_ERROR_MARGIN))
-    && (direction < (NEUTRAL_JOYSTICK_INPUT + NEUTRAL_ERROR_MARGIN))
-    && (direction > (NEUTRAL_JOYSTICK_INPUT - NEUTRAL_ERROR_MARGIN)))
+    if (IsJoystickInNeutral())
     {
+        GetSpeedAndDirection (&speed, &direction);
+        
         // Setup Speed Neutral Window and Limits
         Joystick_Data[SPEED_ARRAY].m_rawInput = speed;
         Joystick_Data[SPEED_ARRAY].m_rawNeutral = speed;
@@ -163,9 +170,42 @@ static void GetJoystickNeutral(void)
         Joystick_Data[DIRECTION_ARRAY].m_rawMinNeutral = direction - NEUTRAL_ERROR_MARGIN;
         Joystick_Data[DIRECTION_ARRAY].m_rawMaxNuetral = direction + NEUTRAL_ERROR_MARGIN;
         
-        gp_State = DRIVING_STATE;
+        gp_State = ENTER_DRIVING_STATE;
     }
             
+}
+
+//------------------------------------------------------------------------------
+// This function sets the Joystick data information. Some is retrieved
+// from the EEPROM, i.e. Max Limits.
+//------------------------------------------------------------------------------
+
+void InitializeJoystickData ()
+{
+    Joystick_Data[SPEED_ARRAY].m_rawInput = NEUTRAL_JOYSTICK_INPUT;
+    Joystick_Data[SPEED_ARRAY].m_rawNeutral = NEUTRAL_JOYSTICK_INPUT;
+    Joystick_Data[SPEED_ARRAY].m_rawMinNeutral = NEUTRAL_JOYSTICK_INPUT - NEUTRAL_ERROR_MARGIN;
+    Joystick_Data[SPEED_ARRAY].m_rawMaxNuetral = NEUTRAL_JOYSTICK_INPUT + NEUTRAL_ERROR_MARGIN;
+    Joystick_Data[SPEED_ARRAY].m_rawMinLimit = NEUTRAL_JOYSTICK_INPUT - JOYSTICK_RAW_MAX_DEFLECTION;
+    Joystick_Data[SPEED_ARRAY].m_rawMaxLimit = NEUTRAL_JOYSTICK_INPUT + JOYSTICK_RAW_MAX_DEFLECTION;
+
+    Joystick_Data[DIRECTION_ARRAY].m_rawInput = NEUTRAL_JOYSTICK_INPUT;
+    Joystick_Data[DIRECTION_ARRAY].m_rawNeutral = NEUTRAL_JOYSTICK_INPUT;
+    Joystick_Data[DIRECTION_ARRAY].m_rawMinNeutral = NEUTRAL_JOYSTICK_INPUT - NEUTRAL_ERROR_MARGIN;
+    Joystick_Data[DIRECTION_ARRAY].m_rawMaxNuetral = NEUTRAL_JOYSTICK_INPUT + NEUTRAL_ERROR_MARGIN;
+    Joystick_Data[DIRECTION_ARRAY].m_rawMinLimit = NEUTRAL_JOYSTICK_INPUT - JOYSTICK_RAW_MAX_DEFLECTION;
+    Joystick_Data[DIRECTION_ARRAY].m_rawMaxLimit = NEUTRAL_JOYSTICK_INPUT + JOYSTICK_RAW_MAX_DEFLECTION;
+}
+
+//------------------------------------------------------------------------------
+// This function waits for the Joystick to be in neutral and no buttons are
+// active.
+//------------------------------------------------------------------------------
+
+static void EnterDrivingState (void)
+{
+    gp_State = DRIVING_STATE;
+
 }
 
 //------------------------------------------------------------------------------
@@ -176,8 +216,7 @@ static void GetJoystickNeutral(void)
 //  "630.0f" is the factor to convert the Analog Inputs to DAC bits.
 //------------------------------------------------------------------------------
 
-
-static void DriveDemand (void)
+static void DrivingState (void)
 {
     uint16_t rawSpeed, rawDirection;
     float offset, demand;
@@ -223,7 +262,59 @@ static void DriveDemand (void)
         int_DirectionDemand = (uint16_t) demand;
     }
     
+    // Shall we do some calibration?
+    if (IsCalibrationButtonActive())
+    {
+        gp_State = ENTER_CALIBRATION_STATE;
+        // Let's stop driving if we are.
+        int_SpeedDemand = NEUTRAL_DEMAND_OUTPUT;
+        int_DirectionDemand = NEUTRAL_DEMAND_OUTPUT;
+    }
+    
+    // Send joystick demands to the TPI board.
     SetTPI_Demands (int_SpeedDemand, int_DirectionDemand);
+}
+
+//------------------------------------------------------------------------------
+// This function prepares the unit for Joystick Calibration
+//  - sound the beeper and wait for the button to be released.
+//------------------------------------------------------------------------------
+
+static void EnterCalibrationState(void)
+{
+    TurnBeeper(BEEPER_ON);
+    if (IsCalibrationButtonActive() == false)
+    {
+        gp_State = DO_JOYSTICK_CALIBRATION_STATE;
+        TurnBeeper(BEEPER_OFF);
+    }
+}
+
+//------------------------------------------------------------------------------
+// This function processes the Joystick Signals looking for the Smallest and 
+// largest Speed and Direction ADC values.
+// This function changes state when the Calibration Button is pressed again
+// and then values are stored in the EEPROM.
+//------------------------------------------------------------------------------
+static void JoystickCalibrationState(void)
+{
+    if (IsCalibrationButtonActive())
+    {
+        TurnBeeper(BEEPER_ON);
+        gp_State = EXIT_JOYSTICK_CALIBRATION_STATE;
+    }
+}
+
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+
+static void ExitCalibrationState(void)
+{
+    if (IsCalibrationButtonActive() == false)
+    {
+        TurnBeeper(BEEPER_OFF);
+        gp_State = POWERUP_STATE;   // This will re-establish the "smart neutral" window.
+    }
 }
 
 //------------------------------------------------------------------------------
@@ -251,3 +342,15 @@ static void SetTPI_Demands (uint16_t speedDemand, uint16_t directionDemand)
     dacBspSet (DAC_SELECT_LEFT_RIGHT, myDirection);
 }
 
+#ifdef WEBEREADINTHEEEPROMP    
+    // Try reading the EEPROM
+    eepromStatus = false;
+    eepromBspWriteByte (0, 0xde, 100);
+    eepromBspWriteByte (1, 0xad, 100);
+    eepromStatus = eepromBspReadSection (0, 1, &xVal, 100);
+    eepromStatus = eepromBspReadSection (1, 1, &yVal, 100);
+    eepromBspWriteByte (0, 0xaa, 100);
+    eepromBspWriteByte (1, 0x55, 100);
+    eepromStatus = eepromBspReadSection (0, 1, &xVal, 100);
+    eepromStatus = eepromBspReadSection (1, 1, &yVal, 100);
+#endif
