@@ -209,8 +209,25 @@ static void writeByte(uint8_t address, uint8_t data)
 #endif
 }
 
+//------------------------------------------------------------------------------
 
-//-------------------------------
+void EEPROM_writeInt16 (uint8_t address, uint16_t data)
+{
+    uint16_t myData;
+    
+    myData = data;
+    writeBuffer(address, 2, (uint8_t*) &myData, 1);
+    
+}
+
+//------------------------------------------------------------------------------
+
+void EEPROM_readInt16 (uint8_t address, uint16_t *data)
+{
+    readIntoBuffer(address, 2, (uint8_t*) data);
+}
+
+//------------------------------------------------------------------------------
 // Function: waitForEepromToBeWritable
 //
 // Description: Waits for the internal EEPROM to be ready for a write.

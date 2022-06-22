@@ -33,7 +33,7 @@ static bool g_CalButtonState;
 // Initialize the User Button inputs as Digital Inputs.
 //------------------------------------------------------------------------------
 
-void UserButton_Init(void)
+void UserButtonInit(void)
 {
     // Initialize the Calibration Button input
     TRISBbits.TRISB2 = GPIO_BIT_INPUT;

@@ -47,6 +47,12 @@ enum STATE_ENUM {
     EXIT_JOYSTICK_CALIBRATION_STATE,
 }  gp_State;
 
+// Define the locations in EEPROM
+#define EEPROM_SPEED_LOWER_SCALE 0
+#define EEPROM_SPEED_UPPER_SCALE (EEPROM_SPEED_LOWER_SCALE + 2)
+#define EEPROM_DIRECTION_LOWER_SCALE (EEPROM_SPEED_UPPER_SCALE + 2)
+#define EEPROM_DIRECTION_UPPER_SCALE (EEPROM_DIRECTION_LOWER_SCALE + 2)
+
 /* ***********************   Function Prototypes   ************************ */
 
 static void EnterDrivingState (void);
@@ -58,7 +64,7 @@ static void JoystickCalibrationState(void);
 static void ExitCalibrationState(void);
 
 static void SetTPI_Demands (uint16_t speedDemand, uint16_t directionDemand);
-void InitializeJoystickData ();
+void InitializeJoystickData (void);
 
 /* ***********************   Global Variables ***************************** */
 
@@ -67,14 +73,17 @@ bool eepromStatus;
 uint16_t g_RawSpeedInput;
 uint16_t g_RawDirectionInput;
 
-typedef struct
+// This holds the Joystick information 
+typedef struct 
 {
     uint16_t m_rawInput;
     uint16_t m_rawNeutral;
     uint16_t m_rawMinNeutral;
     uint16_t m_rawMaxNuetral;
-    uint16_t m_rawMinLimit;
-    uint16_t m_rawMaxLimit;
+    uint16_t m_rawMinimum;
+    uint16_t m_rawMaximum;
+    uint16_t m_PositiveScale;   // This is used to scale from neutral to Most Positive
+    uint16_t m_NegativeScale;   // This is used to scale from neutral to Most Negative
 } JOYSTICK_STRUCT;
 JOYSTICK_STRUCT Joystick_Data[NUM_JS_POTS];
 
@@ -90,7 +99,7 @@ int main (void)
     dacBspInit();
     eepromBspInit();
     AnalogInputInit();
-    InitializeJoystickData();
+    UserButtonInit();
     
     dacBspSet (DAC_SELECT_FORWARD_BACKWARD, NEUTRAL_DEMAND_OUTPUT);
     dacBspSet (DAC_SELECT_LEFT_RIGHT, NEUTRAL_DEMAND_OUTPUT);
@@ -98,6 +107,9 @@ int main (void)
     // Short breather to allow board to power up normally.
     for (i = 0; i < 2000; ++i)
         bspDelayUs (US_DELAY_500_us);
+
+    InitializeJoystickData();
+
     // Announce the startup
 //    TurnBeeper(BEEPER_ON);
     for (i = 0; i < 50; ++i)
@@ -180,21 +192,55 @@ static void EstablishJoystickNeutral(void)
 // from the EEPROM, i.e. Max Limits.
 //------------------------------------------------------------------------------
 
-void InitializeJoystickData ()
+void InitializeJoystickData (void)
 {
     Joystick_Data[SPEED_ARRAY].m_rawInput = NEUTRAL_JOYSTICK_INPUT;
     Joystick_Data[SPEED_ARRAY].m_rawNeutral = NEUTRAL_JOYSTICK_INPUT;
     Joystick_Data[SPEED_ARRAY].m_rawMinNeutral = NEUTRAL_JOYSTICK_INPUT - NEUTRAL_ERROR_MARGIN;
     Joystick_Data[SPEED_ARRAY].m_rawMaxNuetral = NEUTRAL_JOYSTICK_INPUT + NEUTRAL_ERROR_MARGIN;
-    Joystick_Data[SPEED_ARRAY].m_rawMinLimit = NEUTRAL_JOYSTICK_INPUT - JOYSTICK_RAW_MAX_DEFLECTION;
-    Joystick_Data[SPEED_ARRAY].m_rawMaxLimit = NEUTRAL_JOYSTICK_INPUT + JOYSTICK_RAW_MAX_DEFLECTION;
+    Joystick_Data[SPEED_ARRAY].m_rawMinimum = NEUTRAL_JOYSTICK_INPUT - JOYSTICK_RAW_MAX_DEFLECTION;
+    Joystick_Data[SPEED_ARRAY].m_rawMaximum = NEUTRAL_JOYSTICK_INPUT + JOYSTICK_RAW_MAX_DEFLECTION;
+    Joystick_Data[SPEED_ARRAY].m_PositiveScale = JOYSTICK_RAW_MAX_DEFLECTION;
+    Joystick_Data[SPEED_ARRAY].m_NegativeScale = JOYSTICK_RAW_MAX_DEFLECTION;
 
     Joystick_Data[DIRECTION_ARRAY].m_rawInput = NEUTRAL_JOYSTICK_INPUT;
     Joystick_Data[DIRECTION_ARRAY].m_rawNeutral = NEUTRAL_JOYSTICK_INPUT;
     Joystick_Data[DIRECTION_ARRAY].m_rawMinNeutral = NEUTRAL_JOYSTICK_INPUT - NEUTRAL_ERROR_MARGIN;
     Joystick_Data[DIRECTION_ARRAY].m_rawMaxNuetral = NEUTRAL_JOYSTICK_INPUT + NEUTRAL_ERROR_MARGIN;
-    Joystick_Data[DIRECTION_ARRAY].m_rawMinLimit = NEUTRAL_JOYSTICK_INPUT - JOYSTICK_RAW_MAX_DEFLECTION;
-    Joystick_Data[DIRECTION_ARRAY].m_rawMaxLimit = NEUTRAL_JOYSTICK_INPUT + JOYSTICK_RAW_MAX_DEFLECTION;
+    Joystick_Data[DIRECTION_ARRAY].m_rawMinimum = NEUTRAL_JOYSTICK_INPUT - JOYSTICK_RAW_MAX_DEFLECTION;
+    Joystick_Data[DIRECTION_ARRAY].m_rawMaximum = NEUTRAL_JOYSTICK_INPUT + JOYSTICK_RAW_MAX_DEFLECTION;
+    Joystick_Data[DIRECTION_ARRAY].m_PositiveScale = JOYSTICK_RAW_MAX_DEFLECTION;
+    Joystick_Data[DIRECTION_ARRAY].m_NegativeScale = JOYSTICK_RAW_MAX_DEFLECTION;
+
+    EEPROM_readInt16 (EEPROM_SPEED_LOWER_SCALE, &Joystick_Data[SPEED_ARRAY].m_NegativeScale);
+    EEPROM_readInt16 (EEPROM_SPEED_UPPER_SCALE, &Joystick_Data[SPEED_ARRAY].m_PositiveScale);
+
+    EEPROM_readInt16 (EEPROM_DIRECTION_LOWER_SCALE, &Joystick_Data[DIRECTION_ARRAY].m_NegativeScale);
+    EEPROM_readInt16 (EEPROM_DIRECTION_UPPER_SCALE, &Joystick_Data[DIRECTION_ARRAY].m_PositiveScale);
+
+    // Perform a sanity check to see if the values in the EEPROM are acceptable.
+    if ((Joystick_Data[SPEED_ARRAY].m_PositiveScale > JOYSTICK_RAW_MAX_DEFLECTION) 
+    || (Joystick_Data[SPEED_ARRAY].m_PositiveScale < JOYSTICK_RAW_MAX_DEFLECTION / 8))
+    {
+        Joystick_Data[SPEED_ARRAY].m_PositiveScale = JOYSTICK_RAW_MAX_DEFLECTION;
+    }
+
+    if ((Joystick_Data[SPEED_ARRAY].m_NegativeScale > JOYSTICK_RAW_MAX_DEFLECTION) 
+    || (Joystick_Data[SPEED_ARRAY].m_NegativeScale < JOYSTICK_RAW_MAX_DEFLECTION / 8))
+    {
+        Joystick_Data[SPEED_ARRAY].m_NegativeScale = JOYSTICK_RAW_MAX_DEFLECTION;
+    }
+    if ((Joystick_Data[DIRECTION_ARRAY].m_PositiveScale > JOYSTICK_RAW_MAX_DEFLECTION) 
+    || (Joystick_Data[DIRECTION_ARRAY].m_PositiveScale < JOYSTICK_RAW_MAX_DEFLECTION / 8))
+    {
+        Joystick_Data[DIRECTION_ARRAY].m_PositiveScale = JOYSTICK_RAW_MAX_DEFLECTION;
+    }
+
+    if ((Joystick_Data[DIRECTION_ARRAY].m_NegativeScale > JOYSTICK_RAW_MAX_DEFLECTION) 
+    || (Joystick_Data[DIRECTION_ARRAY].m_NegativeScale < JOYSTICK_RAW_MAX_DEFLECTION / 8))
+    {
+        Joystick_Data[DIRECTION_ARRAY].m_NegativeScale = JOYSTICK_RAW_MAX_DEFLECTION;
+    }
 }
 
 //------------------------------------------------------------------------------
@@ -204,6 +250,13 @@ void InitializeJoystickData ()
 
 static void EnterDrivingState (void)
 {
+    int i;
+    
+    TurnBeeper(BEEPER_ON);
+    for (i=0; i<100; ++i)
+        bspDelayUs (US_DELAY_200_us);
+    TurnBeeper(BEEPER_OFF);
+
     gp_State = DRIVING_STATE;
 
 }
@@ -230,34 +283,44 @@ static void DrivingState (void)
     // Process the Joystick Speed signal
     if (rawSpeed > Joystick_Data[SPEED_ARRAY].m_rawMaxNuetral)
     {
+        if (rawSpeed > (Joystick_Data[SPEED_ARRAY].m_PositiveScale + Joystick_Data[SPEED_ARRAY].m_rawNeutral))
+            rawSpeed = Joystick_Data[SPEED_ARRAY].m_PositiveScale + Joystick_Data[SPEED_ARRAY].m_rawNeutral;
         demand = (float) NEUTRAL_DEMAND_OUTPUT; 
         offset = rawSpeed - Joystick_Data[SPEED_ARRAY].m_rawNeutral;
-        offset = (offset / 240.0f) * 630.0f;
+        offset = (offset / (float)Joystick_Data[SPEED_ARRAY].m_PositiveScale) * 630.0f;
         demand += offset;
         int_SpeedDemand = (uint16_t) demand;
     }
     else if (rawSpeed < Joystick_Data[SPEED_ARRAY].m_rawMinNeutral)
     {
+        if (rawSpeed < (Joystick_Data[SPEED_ARRAY].m_rawNeutral - Joystick_Data[SPEED_ARRAY].m_NegativeScale))
+            rawSpeed = Joystick_Data[SPEED_ARRAY].m_rawNeutral - Joystick_Data[SPEED_ARRAY].m_NegativeScale;
         demand = (float) NEUTRAL_DEMAND_OUTPUT; 
         offset = Joystick_Data[SPEED_ARRAY].m_rawNeutral - rawSpeed;
-        offset = (offset / 240.0f) * 630.0f;
+        offset = (offset / (float) Joystick_Data[SPEED_ARRAY].m_NegativeScale) * 630.0f;
         demand -= offset;
         int_SpeedDemand = (uint16_t) demand;
     }
     // Process the Joystick Directional signal
     if (rawDirection > Joystick_Data[DIRECTION_ARRAY].m_rawMaxNuetral)
     {
+        // Check to see if the joystick is past the calibrated value.
+        if (rawDirection > (Joystick_Data[DIRECTION_ARRAY].m_PositiveScale + Joystick_Data[DIRECTION_ARRAY].m_rawNeutral))
+            rawDirection = Joystick_Data[DIRECTION_ARRAY].m_PositiveScale + Joystick_Data[DIRECTION_ARRAY].m_rawNeutral;
         demand = (float) NEUTRAL_DEMAND_OUTPUT; 
         offset = rawDirection - Joystick_Data[DIRECTION_ARRAY].m_rawNeutral;
-        offset = (offset / 240.0f) * 630.0f;
+        offset = (offset / (float)Joystick_Data[DIRECTION_ARRAY].m_PositiveScale) * 630.0f;
         demand += offset;
         int_DirectionDemand = (uint16_t) demand;
     }
     else if (rawDirection < Joystick_Data[DIRECTION_ARRAY].m_rawMinNeutral)
     {
+        // Check to see if the joystick is past the calibrated value.
+        if (rawDirection < (Joystick_Data[DIRECTION_ARRAY].m_rawNeutral - Joystick_Data[DIRECTION_ARRAY].m_NegativeScale))
+            rawDirection = Joystick_Data[DIRECTION_ARRAY].m_rawNeutral - Joystick_Data[DIRECTION_ARRAY].m_NegativeScale;
         demand = (float) NEUTRAL_DEMAND_OUTPUT; 
         offset = Joystick_Data[DIRECTION_ARRAY].m_rawNeutral - rawDirection;
-        offset = (offset / 240.0f) * 630.0f;
+        offset = (offset / (float)Joystick_Data[DIRECTION_ARRAY].m_NegativeScale) * 630.0f;
         demand -= offset;
         int_DirectionDemand = (uint16_t) demand;
     }
@@ -285,8 +348,17 @@ static void EnterCalibrationState(void)
     TurnBeeper(BEEPER_ON);
     if (IsCalibrationButtonActive() == false)
     {
-        gp_State = DO_JOYSTICK_CALIBRATION_STATE;
         TurnBeeper(BEEPER_OFF);
+        if (IsJoystickInNeutral())
+        {
+            // Preset the min and max to very small.
+            Joystick_Data[SPEED_ARRAY].m_rawMaximum = Joystick_Data[SPEED_ARRAY].m_rawNeutral;
+            Joystick_Data[SPEED_ARRAY].m_rawMinimum = Joystick_Data[SPEED_ARRAY].m_rawNeutral;
+            Joystick_Data[DIRECTION_ARRAY].m_rawMaximum = Joystick_Data[DIRECTION_ARRAY].m_rawNeutral;
+            Joystick_Data[DIRECTION_ARRAY].m_rawMinimum = Joystick_Data[DIRECTION_ARRAY].m_rawNeutral;
+            
+            gp_State = DO_JOYSTICK_CALIBRATION_STATE;
+        }
     }
 }
 
@@ -298,11 +370,48 @@ static void EnterCalibrationState(void)
 //------------------------------------------------------------------------------
 static void JoystickCalibrationState(void)
 {
+    uint16_t rawSpeed, rawDirection;
+    uint16_t e1, e2, e3, e4;
+    
+    // Get the Joystick's Speed and Direction and seek the lowest and highest
+    // signals.
+    GetSpeedAndDirection (&rawSpeed, &rawDirection);
+    
+    if (rawSpeed > Joystick_Data[SPEED_ARRAY].m_rawMaximum)
+        Joystick_Data[SPEED_ARRAY].m_rawMaximum = rawSpeed;
+    if (rawSpeed < Joystick_Data[SPEED_ARRAY].m_rawMinimum)
+        Joystick_Data[SPEED_ARRAY].m_rawMinimum = rawSpeed;
+    
+    if (rawDirection > Joystick_Data[DIRECTION_ARRAY].m_rawMaximum)
+        Joystick_Data[DIRECTION_ARRAY].m_rawMaximum = rawDirection;
+    if (rawDirection < Joystick_Data[DIRECTION_ARRAY].m_rawMinimum)
+        Joystick_Data[DIRECTION_ARRAY].m_rawMinimum = rawDirection;
+    
+    // Check to see if we want to exit the procedure.
     if (IsCalibrationButtonActive())
     {
+        // Calculate the scales and store them in EEPROM.
+        Joystick_Data[SPEED_ARRAY].m_PositiveScale = Joystick_Data[SPEED_ARRAY].m_rawMaximum - Joystick_Data[SPEED_ARRAY].m_rawNeutral;
+        Joystick_Data[SPEED_ARRAY].m_NegativeScale = Joystick_Data[SPEED_ARRAY].m_rawNeutral - Joystick_Data[SPEED_ARRAY].m_rawMinimum;
+        Joystick_Data[DIRECTION_ARRAY].m_PositiveScale = Joystick_Data[DIRECTION_ARRAY].m_rawMaximum - Joystick_Data[DIRECTION_ARRAY].m_rawNeutral;
+        Joystick_Data[DIRECTION_ARRAY].m_NegativeScale = Joystick_Data[DIRECTION_ARRAY].m_rawNeutral - Joystick_Data[DIRECTION_ARRAY].m_rawMinimum;
+                
+        EEPROM_writeInt16 (EEPROM_SPEED_LOWER_SCALE, Joystick_Data[SPEED_ARRAY].m_NegativeScale);
+        EEPROM_writeInt16 (EEPROM_SPEED_UPPER_SCALE, Joystick_Data[SPEED_ARRAY].m_PositiveScale);
+
+        EEPROM_writeInt16 (EEPROM_DIRECTION_LOWER_SCALE, Joystick_Data[DIRECTION_ARRAY].m_NegativeScale);
+        EEPROM_writeInt16 (EEPROM_DIRECTION_UPPER_SCALE, Joystick_Data[DIRECTION_ARRAY].m_PositiveScale);
+        
+        EEPROM_readInt16 (EEPROM_SPEED_LOWER_SCALE, &e1);
+        EEPROM_readInt16 (EEPROM_SPEED_UPPER_SCALE, &e2);
+
+        EEPROM_readInt16 (EEPROM_DIRECTION_LOWER_SCALE, &e3);
+        EEPROM_readInt16 (EEPROM_DIRECTION_UPPER_SCALE, &e4);
         TurnBeeper(BEEPER_ON);
+
         gp_State = EXIT_JOYSTICK_CALIBRATION_STATE;
     }
+    
 }
 
 //------------------------------------------------------------------------------

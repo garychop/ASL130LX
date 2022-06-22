@@ -56,7 +56,7 @@
         <targetDevice>PIC18F4550</targetDevice>
         <targetHeader></targetHeader>
         <targetPluginBoard></targetPluginBoard>
-        <platformTool>noID</platformTool>
+        <platformTool>pk4hybrid</platformTool>
         <languageToolchain>XC8</languageToolchain>
         <languageToolchainVersion>2.35</languageToolchainVersion>
         <platform>3</platform>
@@ -221,7 +221,7 @@
         <property key="programoptions.preservedataflash" value="false"/>
         <property key="programoptions.preservedataflash.ranges"
                   value="${memories.dataflash.default}"/>
-        <property key="programoptions.preserveeeprom" value="false"/>
+        <property key="programoptions.preserveeeprom" value="true"/>
         <property key="programoptions.preserveeeprom.ranges" value="0-ff"/>
         <property key="programoptions.preserveprogram.ranges" value=""/>
         <property key="programoptions.preserveprogramrange" value="false"/>
@@ -291,6 +291,8 @@
         <property key="memories.programmemory" value="true"/>
         <property key="memories.programmemory.ranges" value="0-7fff"/>
         <property key="poweroptions.powerenable" value="false"/>
+        <property key="programmerToGoFilePath"
+                  value="C:/asl/ASL130_MEC/firmware/debug/default/default_ptg"/>
         <property key="programmerToGoImageName" value="default_ptg"/>
         <property key="programoptions.donoteraseauxmem" value="false"/>
         <property key="programoptions.eraseb4program" value="true"/>
@@ -304,7 +306,7 @@
         <property key="programoptions.preservedataflash" value="false"/>
         <property key="programoptions.preservedataflash.ranges"
                   value="${memories.dataflash.default}"/>
-        <property key="programoptions.preserveeeprom" value="false"/>
+        <property key="programoptions.preserveeeprom" value="true"/>
         <property key="programoptions.preserveeeprom.ranges" value="0-ff"/>
         <property key="programoptions.preserveprogram.ranges" value=""/>
         <property key="programoptions.preserveprogramrange" value="false"/>
@@ -462,7 +464,7 @@
         <property key="debugoptions.debug-startup" value="Use system settings"/>
         <property key="debugoptions.reset-behaviour" value="Use system settings"/>
         <property key="debugoptions.simultaneous.debug" value="false"/>
-        <property key="debugoptions.useswbreakpoints" value="false"/>
+        <property key="debugoptions.useswbreakpoints" value="true"/>
         <property key="freeze.timers" value="false"/>
         <property key="memories.aux" value="false"/>
         <property key="memories.bootflash" value="true"/>
@@ -493,7 +495,7 @@
         <property key="programoptions.preservedataflash" value="false"/>
         <property key="programoptions.preservedataflash.ranges"
                   value="${memories.dataflash.default}"/>
-        <property key="programoptions.preserveeeprom" value="false"/>
+        <property key="programoptions.preserveeeprom" value="true"/>
         <property key="programoptions.preserveeeprom.ranges" value="0-ff"/>
         <property key="programoptions.preserveprogram.ranges" value=""/>
         <property key="programoptions.preserveprogramrange" value="false"/>
@@ -547,7 +549,7 @@
         <property key="debugoptions.debug-startup" value="Use system settings"/>
         <property key="debugoptions.reset-behaviour" value="Use system settings"/>
         <property key="debugoptions.simultaneous.debug" value="false"/>
-        <property key="debugoptions.useswbreakpoints" value="false"/>
+        <property key="debugoptions.useswbreakpoints" value="true"/>
         <property key="freeze.timers" value="false"/>
         <property key="memories.aux" value="false"/>
         <property key="memories.bootflash" value="true"/>
@@ -578,7 +580,7 @@
         <property key="programoptions.preservedataflash" value="false"/>
         <property key="programoptions.preservedataflash.ranges"
                   value="${memories.dataflash.default}"/>
-        <property key="programoptions.preserveeeprom" value="false"/>
+        <property key="programoptions.preserveeeprom" value="true"/>
         <property key="programoptions.preserveeeprom.ranges" value="0-ff"/>
         <property key="programoptions.preserveprogram.ranges" value=""/>
         <property key="programoptions.preserveprogramrange" value="false"/>

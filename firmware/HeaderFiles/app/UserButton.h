@@ -38,7 +38,7 @@
 #include <stdbool.h>
 
 void Read_User_Buttons(void);
-void UserButton_Init(void);
+void UserButtonInit(void);
 bool IsCalibrationButtonActive (void);
 
 #endif	/* USER_BUTTON_H */
