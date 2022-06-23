@@ -59,6 +59,19 @@ void eepromBspInit(void)
     eepromBspWriteBuffer(0, 4, write_buff, 4);
     (void)eepromBspReadSection(0, 4, read_bytes, 1);
     while(1);
+    
+    
+    // Try reading the EEPROM
+    eepromStatus = false;
+    eepromBspWriteByte (0, 0xde, 100);
+    eepromBspWriteByte (1, 0xad, 100);
+    eepromStatus = eepromBspReadSection (0, 1, &xVal, 100);
+    eepromStatus = eepromBspReadSection (1, 1, &yVal, 100);
+    eepromBspWriteByte (0, 0xaa, 100);
+    eepromBspWriteByte (1, 0x55, 100);
+    eepromStatus = eepromBspReadSection (0, 1, &xVal, 100);
+    eepromStatus = eepromBspReadSection (1, 1, &yVal, 100);
+
 #endif
 }
 

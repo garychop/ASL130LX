@@ -23,9 +23,13 @@
 //------------------------------------------------------------------------------
 // Local Variables
 
-static uint16_t g_CalButton_DebounceCounter;
+static uint8_t g_CalButton_DebounceCounter;
 static bool g_CalButtonState;
 
+#ifndef DEBUG
+static uint8_t g_UserPort_DebounceCounter;
+static bool g_UserPort_State;
+#endif
 //------------------------------------------------------------------------------
 // Forward Prototype Declarations
 
@@ -37,19 +41,37 @@ void UserButtonInit(void)
 {
     // Initialize the Calibration Button input
     TRISBbits.TRISB2 = GPIO_BIT_INPUT;
-
     g_CalButton_DebounceCounter = 0;
     g_CalButtonState = PORTBbits.RB2;
- 
+
+#ifndef DEBUG
+    // Setup USER PORT as input.
+    // Unfortunately, PIN RB6 is shared with PGD programming pin
+    TRISBbits.TRISB7 = GPIO_BIT_INPUT;  // USER PORT
+    g_UserPort_State = PORTBbits.RB7;
+    g_UserPort_DebounceCounter = 0;
+    
+#endif    
 }
 
 //------------------------------------------------------------------------------
 // Functions returns true if the Calibration Button is pressed.
 bool IsCalibrationButtonActive (void)
 {
+#ifndef DEBUG
     return (g_CalButtonState ? false : true);   // Closed is active low.
+#else
+    return false;
+#endif
 }
 
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+
+bool IsUserPortButtonActive (void)
+{
+    return (g_UserPort_State ? false : true);   // Closed is active low.
+}
 //------------------------------------------------------------------------------
 
 void Read_User_Buttons (void)
@@ -68,5 +90,22 @@ void Read_User_Buttons (void)
             g_CalButton_DebounceCounter = 0;
         }
     }
+
+#ifndef DEBUG
+    if (PORTBbits.RB7 == g_UserPort_State)
+    {
+        // Nothing to do, the signal is stable.
+        g_UserPort_DebounceCounter = 0;
+    }
+    else
+    {
+        ++g_UserPort_DebounceCounter;
+        if (g_UserPort_DebounceCounter > MAX_DEBOUNCE)
+        {
+            g_UserPort_State = PORTBbits.RB7;
+            g_UserPort_DebounceCounter = 0;
+        }
+    }
+#endif    
 }
 
