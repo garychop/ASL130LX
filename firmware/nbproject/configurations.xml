@@ -16,6 +16,7 @@
         <itemPath>HeaderFiles/bsp/device_xc8.h</itemPath>
         <itemPath>HeaderFiles/bsp/eeprom_bsp.h</itemPath>
         <itemPath>HeaderFiles/bsp/bsp.h</itemPath>
+        <itemPath>HeaderFiles/bsp/DigitalOutput.h</itemPath>
       </logicalFolder>
     </logicalFolder>
     <logicalFolder name="LinkerScript"
@@ -36,6 +37,7 @@
         <itemPath>SourceFiles/bsp/bsp.c</itemPath>
         <itemPath>SourceFiles/bsp/dac_bsp.c</itemPath>
         <itemPath>SourceFiles/bsp/eeprom_bsp.c</itemPath>
+        <itemPath>SourceFiles/bsp/DigitalOutput.c</itemPath>
       </logicalFolder>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"

@@ -41,6 +41,7 @@ void Read_User_Buttons(void);
 void UserButtonInit(void);
 bool IsCalibrationButtonActive (void);
 bool IsUserPortButtonActive (void);
+bool IsModeButtonActive (void);
 
 #endif	/* USER_BUTTON_H */
 

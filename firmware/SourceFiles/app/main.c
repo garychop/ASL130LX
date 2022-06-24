@@ -20,6 +20,7 @@
 
 #include "bsp.h"
 #include "beeper.h"
+#include "DigitalOutput.h"
 #include "dac_bsp.h"
 #include "eeprom_bsp.h"
 #include "AnalogInput.h"
@@ -45,6 +46,9 @@ enum STATE_ENUM {
     ENTER_BLUETOOTH_STATE,
     BLUETOOTH_STATE,
     EXIT_BLUETOOTH_STATE,
+    ENTER_MODE_CHANGE_STATE,
+    MODE_CHANGE_STATE,
+    EXIT_MODE_CHANGE_STATE,
     ENTER_CALIBRATION_STATE,
     DO_JOYSTICK_CALIBRATION_STATE,
     EXIT_JOYSTICK_CALIBRATION_STATE,
@@ -62,6 +66,10 @@ static void EnterDrivingState (void);
 static void DrivingState (void);
 static void EnterBluetoothState (void);
 static void BluetoothControlState (void);
+static void EnterModeChangeState (void);
+static void ModeChangeState (void);
+static void ExitModeChangeState (void);
+
 static void EnterCalibrationState(void);
 static void JoystickCalibrationState(void);
 static void ExitCalibrationState(void);
@@ -71,11 +79,6 @@ void InitializeJoystickData (void);
 static void EstablishJoystickNeutral(void);
 
 /* ***********************   Global Variables ***************************** */
-
-uint8_t xVal, yVal;
-bool eepromStatus;
-uint16_t g_RawSpeedInput;
-uint16_t g_RawDirectionInput;
 
 // This holds the Joystick information 
 typedef struct 
@@ -100,6 +103,7 @@ int main (void)
 	UTRDIS = 1; 						//	USB transceiver disable 
     bspInitCore();
     beeperInit();
+    DigitalOutputInit();
     dacBspInit();
     eepromBspInit();
     BluetoothControlInit();
@@ -149,6 +153,15 @@ int main (void)
                 break;
             case BLUETOOTH_STATE:
                 BluetoothControlState();
+                break;
+            case ENTER_MODE_CHANGE_STATE:
+                EnterModeChangeState();
+                break;
+            case MODE_CHANGE_STATE:
+                ModeChangeState();
+                break;
+            case EXIT_MODE_CHANGE_STATE:
+                ExitModeChangeState();
                 break;
             case ENTER_CALIBRATION_STATE:
                 EnterCalibrationState();
@@ -273,6 +286,15 @@ static void DrivingState (void)
         int_SpeedDemand = NEUTRAL_DEMAND_OUTPUT;
         int_DirectionDemand = NEUTRAL_DEMAND_OUTPUT;
     }
+    
+    // Shall we change Modes
+    if (IsModeButtonActive())
+    {
+        gp_State = ENTER_MODE_CHANGE_STATE;
+        // Let's stop driving if we are.
+        int_SpeedDemand = NEUTRAL_DEMAND_OUTPUT;
+        int_DirectionDemand = NEUTRAL_DEMAND_OUTPUT;
+    }
 
     // Send joystick demands to the TPI board.
     SetTPI_Demands (int_SpeedDemand, int_DirectionDemand);
@@ -337,10 +359,36 @@ static void BluetoothControlState (void)
             // Left is active
             SendBlueToothSignal (GPIO_LOW, LEFT_BT);
         }
-        
     }
-
 }
+
+//------------------------------------------------------------------------------
+
+static void EnterModeChangeState (void)
+{
+    SetResetOutput (GPIO_HIGH);
+    gp_State = MODE_CHANGE_STATE;
+}
+
+//------------------------------------------------------------------------------
+
+static void ModeChangeState (void)
+{
+    if (IsModeButtonActive() == false)
+    {
+        gp_State = EXIT_MODE_CHANGE_STATE;
+        SetResetOutput (GPIO_LOW);
+    }
+}
+
+//------------------------------------------------------------------------------
+
+static void ExitModeChangeState (void)
+{
+    gp_State = ENTER_DRIVING_STATE; // This checks for neutral and no switches
+                                    // ... before allowing to drive
+}
+
 //------------------------------------------------------------------------------
 // This function prepares the unit for Joystick Calibration
 //  - sound the beeper and wait for the button to be released.

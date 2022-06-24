@@ -26,6 +26,7 @@
 #define GPIO_LOW 		(0)
 #define GPIO_HIGH 		(1)
 
+// These are used to set individual Ports for Input or Output.
 #define GPIO_BIT_INPUT 	(1)
 #define GPIO_BIT_OUTPUT (0)
 
