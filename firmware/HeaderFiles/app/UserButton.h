@@ -42,6 +42,10 @@ void UserButtonInit(void);
 bool IsCalibrationButtonActive (void);
 bool IsUserPortButtonActive (void);
 bool IsModeButtonActive (void);
+bool IsSW2_1_Closed (void);
+bool IsSW2_2_Closed (void);
+bool IsMouseClickActive (void);
+
 
 #endif	/* USER_BUTTON_H */
 

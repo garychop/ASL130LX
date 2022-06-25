@@ -35,6 +35,23 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+enum JOYSTICK_CHANNEL_ENUM {SPEED_ARRAY, DIRECTION_ARRAY, NUM_JS_POTS};
+
+// This holds the Joystick information 
+typedef struct 
+{
+    uint16_t m_rawInput;
+    uint16_t m_rawNeutral;
+    uint16_t m_rawMinNeutral;
+    uint16_t m_rawMaxNuetral;
+    uint16_t m_rawMinimum;
+    uint16_t m_rawMaximum;
+    uint16_t m_PositiveScale;   // This is used to scale from neutral to Most Positive
+    uint16_t m_NegativeScale;   // This is used to scale from neutral to Most Negative
+} JOYSTICK_STRUCT;
+
+extern JOYSTICK_STRUCT Joystick_Data[NUM_JS_POTS];
+
 #define NEUTRAL_JOYSTICK_INPUT (0x202)
 #define NEUTRAL_ERROR_MARGIN (0x40)     // The amount of deviation from the Neutral
 #define JOYSTICK_RAW_MAX_DEFLECTION (220)   // This is the max that the joystick 

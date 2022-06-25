@@ -36,8 +36,6 @@
 #define MIN_DAC_OUTPUT (520)            // 0.76 Volts * 0.00146 volts / bit
 
 
-enum JOYSTICK_CHANNEL_ENUM {SPEED_ARRAY, DIRECTION_ARRAY, NUM_JS_POTS};
-
 enum STATE_ENUM {
     NO_STATE = 0,
     POWERUP_STATE,
@@ -80,19 +78,6 @@ static void EstablishJoystickNeutral(void);
 
 /* ***********************   Global Variables ***************************** */
 
-// This holds the Joystick information 
-typedef struct 
-{
-    uint16_t m_rawInput;
-    uint16_t m_rawNeutral;
-    uint16_t m_rawMinNeutral;
-    uint16_t m_rawMaxNuetral;
-    uint16_t m_rawMinimum;
-    uint16_t m_rawMaximum;
-    uint16_t m_PositiveScale;   // This is used to scale from neutral to Most Positive
-    uint16_t m_NegativeScale;   // This is used to scale from neutral to Most Negative
-} JOYSTICK_STRUCT;
-JOYSTICK_STRUCT Joystick_Data[NUM_JS_POTS];
 
 //------------------------------------------------------------------------------
 
@@ -237,13 +222,16 @@ static void DrivingState (void)
     }
     else if (rawSpeed < Joystick_Data[SPEED_ARRAY].m_rawMinNeutral)
     {
-        if (rawSpeed < (Joystick_Data[SPEED_ARRAY].m_rawNeutral - Joystick_Data[SPEED_ARRAY].m_NegativeScale))
-            rawSpeed = Joystick_Data[SPEED_ARRAY].m_rawNeutral - Joystick_Data[SPEED_ARRAY].m_NegativeScale;
-        demand = (float) NEUTRAL_DEMAND_OUTPUT; 
-        offset = Joystick_Data[SPEED_ARRAY].m_rawNeutral - rawSpeed;
-        offset = (offset / (float) Joystick_Data[SPEED_ARRAY].m_NegativeScale) * 630.0f;
-        demand -= offset;
-        int_SpeedDemand = (uint16_t) demand;
+        if (IsSW2_1_Closed() == false)  // Are we using Reverse as a Mode Switch? NO!
+        {
+            if (rawSpeed < (Joystick_Data[SPEED_ARRAY].m_rawNeutral - Joystick_Data[SPEED_ARRAY].m_NegativeScale))
+                rawSpeed = Joystick_Data[SPEED_ARRAY].m_rawNeutral - Joystick_Data[SPEED_ARRAY].m_NegativeScale;
+            demand = (float) NEUTRAL_DEMAND_OUTPUT; 
+            offset = Joystick_Data[SPEED_ARRAY].m_rawNeutral - rawSpeed;
+            offset = (offset / (float) Joystick_Data[SPEED_ARRAY].m_NegativeScale) * 630.0f;
+            demand -= offset;
+            int_SpeedDemand = (uint16_t) demand;
+        }
     }
     // Process the Joystick Directional signal
     if (rawDirection > Joystick_Data[DIRECTION_ARRAY].m_rawMaxNuetral)
@@ -325,6 +313,16 @@ static void BluetoothControlState (void)
         gp_State = ENTER_DRIVING_STATE; // This checks for neutral and no switches
                                         // ... before allowing to drive
     }
+    
+    if (IsMouseClickActive ())
+    {
+        SetLeftClickOutput (GPIO_LOW);
+    }
+    else
+    {
+        SetLeftClickOutput (GPIO_HIGH);
+    }
+    
     if (IsJoystickInNeutral())
     {
         SendBlueToothSignal (GPIO_HIGH, FWD_BT);

@@ -17,6 +17,12 @@ void DigitalOutputInit(void)
 {
     TRISEbits.TRISE0 = GPIO_BIT_OUTPUT;
     LATEbits.LATE0 = GPIO_LOW;
+
+#ifndef DEBUG    
+    // This is shared with some debugging pin
+//    TRISAbits.TRISA5 = GPIO_BIT_OUTPUT; // This is the LEFT CLICK to BT
+//    LATEbits.LATE0 = GPIO_HIGH;
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -24,6 +30,16 @@ void DigitalOutputInit(void)
 void SetResetOutput (bool state)
 {
     LATEbits.LATE0 = state;
+}
+
+//------------------------------------------------------------------------------
+
+void SetLeftClickOutput (bool state)
+{
+#ifndef DEBUG    
+    // This is shared with some debugging pin
+//    LATAbits.LATA5 = state;
+#endif
 }
 
 //------------------------------------------------------------------------------

@@ -16,6 +16,7 @@
 
 void DigitalOutputInit(void);
 void SetResetOutput (bool state);
+void SetLeftClickOutput (bool state);
 
 #endif	/* DIGITAL_OUTPUT_H */
 

@@ -13,6 +13,8 @@
 #include "bsp.h"
 #include "AnalogInput.h"
 
+JOYSTICK_STRUCT Joystick_Data[NUM_JS_POTS];
+
 void AnalogInputInit(void)
 {
     TRISAbits.RA0 = GPIO_BIT_INPUT;
@@ -103,7 +105,6 @@ void GetSpeedAndDirection (uint16_t *speed, uint16_t *direction)
     }
     *speed = speedTotal / 10;
     *direction = directionTotal / 10;
-    //*direction = 0x204;
 }
 
 //------------------------------------------------------------------------------
