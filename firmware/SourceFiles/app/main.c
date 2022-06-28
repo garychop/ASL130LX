@@ -18,6 +18,7 @@
 
 /* **************************   Header Files   *************************** */
 
+#include "Version.h"
 #include "bsp.h"
 #include "beeper.h"
 #include "DigitalOutput.h"
@@ -39,8 +40,10 @@
 enum STATE_ENUM {
     NO_STATE = 0,
     POWERUP_STATE,
+    ANNOUNCE_ENTER_DRIVING_STATE,
     ENTER_DRIVING_STATE,
     DRIVING_STATE,
+    ANNOUNCE_ENTER_BLUETOOTH_STATE,
     ENTER_BLUETOOTH_STATE,
     BLUETOOTH_STATE,
     EXIT_BLUETOOTH_STATE,
@@ -60,8 +63,10 @@ enum STATE_ENUM {
 
 /* ***********************   Function Prototypes   ************************ */
 
+static void AnnunceEnterDriverState (void);
 static void EnterDrivingState (void);
 static void DrivingState (void);
+static void AnnounceEnterBluetoothState (void);
 static void EnterBluetoothState (void);
 static void BluetoothControlState (void);
 static void EnterModeChangeState (void);
@@ -105,8 +110,8 @@ int main (void)
     InitializeJoystickData();
 
     // Announce the startup
-//    TurnBeeper(BEEPER_ON);
-    for (i = 0; i < 50; ++i)
+    TurnBeeper(BEEPER_ON);
+    for (i = 0; i < 150; ++i)
     {
         Read_User_Buttons();  // Get and debounce the User Buttons.
         bspDelayUs (US_DELAY_500_us);
@@ -127,11 +132,17 @@ int main (void)
             case POWERUP_STATE:
                 EstablishJoystickNeutral();
                 break;
+            case ANNOUNCE_ENTER_DRIVING_STATE:
+                AnnunceEnterDriverState();
+                break;
             case ENTER_DRIVING_STATE:
                 EnterDrivingState();
                 break;
             case DRIVING_STATE:
                 DrivingState();
+                break;
+            case ANNOUNCE_ENTER_BLUETOOTH_STATE:
+                AnnounceEnterBluetoothState();
                 break;
             case ENTER_BLUETOOTH_STATE:
                 EnterBluetoothState();
@@ -165,19 +176,24 @@ int main (void)
 }
 
 //------------------------------------------------------------------------------
+static void AnnunceEnterDriverState (void)
+{
+    int i;
+    
+    TurnBeeper(BEEPER_ON);
+    bspDelayMs (500);
+    TurnBeeper(BEEPER_OFF);
+
+    gp_State = ENTER_DRIVING_STATE;
+}
+
+//------------------------------------------------------------------------------
 // This function waits for the Joystick to be in neutral and no buttons are
 // active.
 //------------------------------------------------------------------------------
 
 static void EnterDrivingState (void)
 {
-    int i;
-    
-    //TurnBeeper(BEEPER_ON);
-    for (i=0; i<100; ++i)
-        bspDelayUs (US_DELAY_200_us);
-    TurnBeeper(BEEPER_OFF);
-
     if (IsJoystickInNeutral())
     {
         if (IsUserPortButtonActive() == false)
@@ -269,7 +285,7 @@ static void DrivingState (void)
     // Shall we change to Bluetooth Mode?
     if (IsUserPortButtonActive())
     {
-        gp_State = ENTER_BLUETOOTH_STATE;
+        gp_State = ANNOUNCE_ENTER_BLUETOOTH_STATE;
         // Let's stop driving if we are.
         int_SpeedDemand = NEUTRAL_DEMAND_OUTPUT;
         int_DirectionDemand = NEUTRAL_DEMAND_OUTPUT;
@@ -289,14 +305,22 @@ static void DrivingState (void)
 }
 
 //------------------------------------------------------------------------------
+static void AnnounceEnterBluetoothState (void)
+{
+    EnableBluetooth();
 
+    TurnBeeper(BEEPER_ON);
+    bspDelayMs (2000);
+    TurnBeeper(BEEPER_OFF);
+    
+    gp_State = ENTER_BLUETOOTH_STATE;
+}
+
+//------------------------------------------------------------------------------
 static void EnterBluetoothState (void)
 {
-    TurnBeeper(BEEPER_ON);
     if (IsUserPortButtonActive() == false)
     {
-        TurnBeeper(BEEPER_OFF);
-        EnableBluetooth();
         gp_State = BLUETOOTH_STATE;
     }
 }
@@ -310,7 +334,7 @@ static void BluetoothControlState (void)
     if (IsUserPortButtonActive())
     {
         DisableBluetooth();
-        gp_State = ENTER_DRIVING_STATE; // This checks for neutral and no switches
+        gp_State = ANNOUNCE_ENTER_DRIVING_STATE; // This checks for neutral and no switches
                                         // ... before allowing to drive
     }
     

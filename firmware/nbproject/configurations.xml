@@ -8,6 +8,7 @@
         <itemPath>HeaderFiles/app/UserButton.h</itemPath>
         <itemPath>HeaderFiles/app/beeper.h</itemPath>
         <itemPath>HeaderFiles/app/BluetoothControl.h</itemPath>
+        <itemPath>HeaderFiles/app/Version.h</itemPath>
       </logicalFolder>
       <logicalFolder name="f1" displayName="bsp" projectFiles="true">
         <itemPath>HeaderFiles/bsp/AnalogInput.h</itemPath>
