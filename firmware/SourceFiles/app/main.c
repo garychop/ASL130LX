@@ -6,10 +6,10 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 //#include <18f4550.H>
-#include <xc.h>
 
 // NOTE: This must ALWAYS be the first include in a file.
 #include "device_xc8.h"
+#include <xc.h>
 
 // from stdlib
 #include <stdint.h>
@@ -27,6 +27,7 @@
 #include "AnalogInput.h"
 #include "UserButton.h"
 #include "BluetoothControl.h"
+
 
 /* ******************************   Macros   ****************************** */
 
@@ -60,6 +61,10 @@ enum STATE_ENUM {
 #define EEPROM_SPEED_UPPER_SCALE (EEPROM_SPEED_LOWER_SCALE + 2)
 #define EEPROM_DIRECTION_LOWER_SCALE (EEPROM_SPEED_UPPER_SCALE + 2)
 #define EEPROM_DIRECTION_UPPER_SCALE (EEPROM_DIRECTION_LOWER_SCALE + 2)
+#define EEPROM_VALID_DATA1 (0xdead)
+#define EEPROM_VALID_DATA2 (0xaa55)
+#define EEPROM_1st_CHECK (EEPROM_DIRECTION_UPPER_SCALE + 2)
+#define EEPROM_2nd_CHECK (EEPROM_1st_CHECK + 2)
 
 /* ***********************   Function Prototypes   ************************ */
 
@@ -78,7 +83,7 @@ static void JoystickCalibrationState(void);
 static void ExitCalibrationState(void);
 
 static void SetTPI_Demands (uint16_t speedDemand, uint16_t directionDemand);
-void InitializeJoystickData (void);
+bool InitializeJoystickData (void);
 static void EstablishJoystickNeutral(void);
 
 /* ***********************   Global Variables ***************************** */
@@ -89,6 +94,7 @@ static void EstablishJoystickNeutral(void);
 int main (void)
 {
     int i;
+    bool eepromStatus;
     
 	UTRDIS = 1; 						//	USB transceiver disable 
     bspInitCore();
@@ -107,7 +113,19 @@ int main (void)
     for (i = 0; i < 2000; ++i)
         bspDelayUs (US_DELAY_500_us);
 
-    InitializeJoystickData();
+    eepromStatus = InitializeJoystickData();
+    if (eepromStatus == false)     // EEPROM data is bad
+    {
+        TurnBeeper(BEEPER_ON);
+        for (i = 0; i < 150; ++i)
+        {
+            Read_User_Buttons();  // Get and debounce the User Buttons.
+            bspDelayUs (US_DELAY_500_us);
+        }
+        TurnBeeper(BEEPER_OFF);
+        for (i = 0; i < 150; ++i)   // add a short off delay
+            bspDelayUs (US_DELAY_500_us);
+    }
 
     // Announce the startup
     TurnBeeper(BEEPER_ON);
@@ -347,41 +365,57 @@ static void BluetoothControlState (void)
         SetLeftClickOutput (GPIO_HIGH);
     }
     
-    if (IsJoystickInNeutral())
-    {
-        SendBlueToothSignal (GPIO_HIGH, FWD_BT);
-        SendBlueToothSignal (GPIO_HIGH, REV_BT);
-        SendBlueToothSignal (GPIO_HIGH, LEFT_BT);
-        SendBlueToothSignal (GPIO_HIGH, RIGHT_BT);
-    }
-    else
-    {
+//    if (IsJoystickInNeutral())
+//    {
+//        SendBlueToothSignal (GPIO_HIGH, FWD_BT);
+//        SendBlueToothSignal (GPIO_HIGH, REV_BT);
+//        SendBlueToothSignal (GPIO_HIGH, LEFT_BT);
+//        SendBlueToothSignal (GPIO_HIGH, RIGHT_BT);
+//    }
+//    else
+//    {
         // Determine which joystick direction is active and send signal
         // to Bluetooth module.
         GetSpeedAndDirection (&rawSpeed, &rawDirection);
+        
         // Process SPEED demand
         if (rawSpeed > (Joystick_Data[SPEED_ARRAY].m_rawNeutral + (Joystick_Data[SPEED_ARRAY].m_PositiveScale / 2)))
         {
-            // Forward is active
-            SendBlueToothSignal (GPIO_LOW, FWD_BT);
+            SendBlueToothSignal (GPIO_LOW, FWD_BT); // Forward is active
         }
-        else if (rawSpeed < (Joystick_Data[SPEED_ARRAY].m_rawNeutral - (Joystick_Data[SPEED_ARRAY].m_NegativeScale / 2)))
+        else
         {
-            // Reverse is active
-            SendBlueToothSignal (GPIO_LOW, REV_BT);
+            SendBlueToothSignal (GPIO_HIGH, FWD_BT);    // Forward is NOT active
         }
+        
+        if (rawSpeed < (Joystick_Data[SPEED_ARRAY].m_rawNeutral - (Joystick_Data[SPEED_ARRAY].m_NegativeScale / 2)))
+        {
+            SendBlueToothSignal (GPIO_LOW, REV_BT); // Reverse is active
+        }
+        else
+        {
+            SendBlueToothSignal (GPIO_HIGH, REV_BT);    // Reverse is not active
+        }
+        
         // Process DIRECTION demand
         if (rawDirection > (Joystick_Data[DIRECTION_ARRAY].m_rawNeutral + (Joystick_Data[DIRECTION_ARRAY].m_PositiveScale / 2)))
         {
-            // Right is active
-            SendBlueToothSignal (GPIO_LOW, RIGHT_BT);
+            SendBlueToothSignal (GPIO_LOW, RIGHT_BT);   // Right is active
         }
-        else if (rawDirection < (Joystick_Data[DIRECTION_ARRAY].m_rawNeutral - (Joystick_Data[DIRECTION_ARRAY].m_NegativeScale / 2)))
+        else
         {
-            // Left is active
-            SendBlueToothSignal (GPIO_LOW, LEFT_BT);
+            SendBlueToothSignal (GPIO_HIGH, RIGHT_BT);  // Right is NOT active
         }
-    }
+        
+        if (rawDirection < (Joystick_Data[DIRECTION_ARRAY].m_rawNeutral - (Joystick_Data[DIRECTION_ARRAY].m_NegativeScale / 2)))
+        {
+            SendBlueToothSignal (GPIO_LOW, LEFT_BT);    // Left is active
+        }
+        else
+        {
+            SendBlueToothSignal (GPIO_HIGH, LEFT_BT);    // Left is NOT active
+        }
+//    }
 }
 
 //------------------------------------------------------------------------------
@@ -462,18 +496,33 @@ static void JoystickCalibrationState(void)
     // Check to see if we want to exit the procedure.
     if (IsCalibrationButtonActive())
     {
-        // Calculate the scales and store them in EEPROM.
+        // Calculate the scales and store them in EEPROM and perform and "extreme" evaluation
         Joystick_Data[SPEED_ARRAY].m_PositiveScale = Joystick_Data[SPEED_ARRAY].m_rawMaximum - Joystick_Data[SPEED_ARRAY].m_rawNeutral;
+        if (Joystick_Data[SPEED_ARRAY].m_PositiveScale > JOYSTICK_RAW_MAX_DEFLECTION) 
+            Joystick_Data[SPEED_ARRAY].m_PositiveScale = JOYSTICK_RAW_MAX_DEFLECTION;
+
         Joystick_Data[SPEED_ARRAY].m_NegativeScale = Joystick_Data[SPEED_ARRAY].m_rawNeutral - Joystick_Data[SPEED_ARRAY].m_rawMinimum;
+        if (Joystick_Data[SPEED_ARRAY].m_NegativeScale > JOYSTICK_RAW_MAX_DEFLECTION) 
+            Joystick_Data[SPEED_ARRAY].m_NegativeScale = JOYSTICK_RAW_MAX_DEFLECTION;
+
         Joystick_Data[DIRECTION_ARRAY].m_PositiveScale = Joystick_Data[DIRECTION_ARRAY].m_rawMaximum - Joystick_Data[DIRECTION_ARRAY].m_rawNeutral;
+        if (Joystick_Data[DIRECTION_ARRAY].m_PositiveScale > JOYSTICK_RAW_MAX_DEFLECTION) 
+            Joystick_Data[DIRECTION_ARRAY].m_PositiveScale = JOYSTICK_RAW_MAX_DEFLECTION;
+
         Joystick_Data[DIRECTION_ARRAY].m_NegativeScale = Joystick_Data[DIRECTION_ARRAY].m_rawNeutral - Joystick_Data[DIRECTION_ARRAY].m_rawMinimum;
+        if (Joystick_Data[DIRECTION_ARRAY].m_NegativeScale > JOYSTICK_RAW_MAX_DEFLECTION) 
+            Joystick_Data[DIRECTION_ARRAY].m_NegativeScale = JOYSTICK_RAW_MAX_DEFLECTION;
+
                 
         EEPROM_writeInt16 (EEPROM_SPEED_LOWER_SCALE, Joystick_Data[SPEED_ARRAY].m_NegativeScale);
         EEPROM_writeInt16 (EEPROM_SPEED_UPPER_SCALE, Joystick_Data[SPEED_ARRAY].m_PositiveScale);
 
         EEPROM_writeInt16 (EEPROM_DIRECTION_LOWER_SCALE, Joystick_Data[DIRECTION_ARRAY].m_NegativeScale);
         EEPROM_writeInt16 (EEPROM_DIRECTION_UPPER_SCALE, Joystick_Data[DIRECTION_ARRAY].m_PositiveScale);
-        
+
+        EEPROM_writeInt16 (EEPROM_1st_CHECK, EEPROM_VALID_DATA1);
+        EEPROM_writeInt16 (EEPROM_2nd_CHECK, EEPROM_VALID_DATA2);
+
         TurnBeeper(BEEPER_ON);
 
         gp_State = EXIT_JOYSTICK_CALIBRATION_STATE;
@@ -551,10 +600,14 @@ static void EstablishJoystickNeutral(void)
 //------------------------------------------------------------------------------
 // This function sets the Joystick data information. Some is retrieved
 // from the EEPROM, i.e. Max Limits.
+// Returns: true if OK, false is not ok.
 //------------------------------------------------------------------------------
 
-void InitializeJoystickData (void)
+bool InitializeJoystickData (void)
 {
+    uint16_t check1, check2;
+    bool returnStatus = true;
+    
     Joystick_Data[SPEED_ARRAY].m_rawInput = NEUTRAL_JOYSTICK_INPUT;
     Joystick_Data[SPEED_ARRAY].m_rawNeutral = NEUTRAL_JOYSTICK_INPUT;
     Joystick_Data[SPEED_ARRAY].m_rawMinNeutral = NEUTRAL_JOYSTICK_INPUT - NEUTRAL_ERROR_MARGIN;
@@ -573,6 +626,13 @@ void InitializeJoystickData (void)
     Joystick_Data[DIRECTION_ARRAY].m_PositiveScale = JOYSTICK_RAW_MAX_DEFLECTION;
     Joystick_Data[DIRECTION_ARRAY].m_NegativeScale = JOYSTICK_RAW_MAX_DEFLECTION;
 
+    EEPROM_readInt16 (EEPROM_1st_CHECK, &check1);
+    EEPROM_readInt16 (EEPROM_2nd_CHECK, &check2);
+
+    if ((check1 != EEPROM_VALID_DATA1) || (check2 != EEPROM_VALID_DATA2))
+    {
+        return (false);
+    }
     EEPROM_readInt16 (EEPROM_SPEED_LOWER_SCALE, &Joystick_Data[SPEED_ARRAY].m_NegativeScale);
     EEPROM_readInt16 (EEPROM_SPEED_UPPER_SCALE, &Joystick_Data[SPEED_ARRAY].m_PositiveScale);
 
@@ -583,24 +643,30 @@ void InitializeJoystickData (void)
     if ((Joystick_Data[SPEED_ARRAY].m_PositiveScale > JOYSTICK_RAW_MAX_DEFLECTION) 
     || (Joystick_Data[SPEED_ARRAY].m_PositiveScale < JOYSTICK_RAW_MAX_DEFLECTION / 8))
     {
+        returnStatus = false;
         Joystick_Data[SPEED_ARRAY].m_PositiveScale = JOYSTICK_RAW_MAX_DEFLECTION;
     }
 
     if ((Joystick_Data[SPEED_ARRAY].m_NegativeScale > JOYSTICK_RAW_MAX_DEFLECTION) 
     || (Joystick_Data[SPEED_ARRAY].m_NegativeScale < JOYSTICK_RAW_MAX_DEFLECTION / 8))
     {
+        returnStatus = false;
         Joystick_Data[SPEED_ARRAY].m_NegativeScale = JOYSTICK_RAW_MAX_DEFLECTION;
     }
     if ((Joystick_Data[DIRECTION_ARRAY].m_PositiveScale > JOYSTICK_RAW_MAX_DEFLECTION) 
     || (Joystick_Data[DIRECTION_ARRAY].m_PositiveScale < JOYSTICK_RAW_MAX_DEFLECTION / 8))
     {
+        returnStatus = false;
         Joystick_Data[DIRECTION_ARRAY].m_PositiveScale = JOYSTICK_RAW_MAX_DEFLECTION;
     }
 
     if ((Joystick_Data[DIRECTION_ARRAY].m_NegativeScale > JOYSTICK_RAW_MAX_DEFLECTION) 
     || (Joystick_Data[DIRECTION_ARRAY].m_NegativeScale < JOYSTICK_RAW_MAX_DEFLECTION / 8))
     {
+        returnStatus = false;
         Joystick_Data[DIRECTION_ARRAY].m_NegativeScale = JOYSTICK_RAW_MAX_DEFLECTION;
     }
+    
+    return (returnStatus);
 }
 

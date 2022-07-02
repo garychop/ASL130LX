@@ -22,7 +22,7 @@
 /* ******************************   Types   ******************************* */
 
 #define MAJOR_VERSION (2)
-#define MINOR_VERSION (0)
+#define MINOR_VERSION (2)
 #define BUILD_VERSION (0)
 
 /* ***********************   Function Prototypes   ************************ */
