@@ -30,6 +30,10 @@
 
 
 /* ******************************   Macros   ****************************** */
+// The following #defines allow for differences in the TPI Board nuetrual
+// window voltage.
+//#define NEUTRAL_DEMAND_OUTPUT (1100)    // This allows just above Neutral Window
+//#define NEUTRAL_DEMAND_OUTPUT (1130)    // This allows just below Neutral Window
 
 #define NEUTRAL_DEMAND_OUTPUT (1115)    // "1115" sets output voltage to 1.62 which
                                         // .. is Neutral Demand for LiNX TPI
