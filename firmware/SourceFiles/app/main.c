@@ -30,7 +30,7 @@
 
 
 /* ******************************   Macros   ****************************** */
-// The following #defines allow for differences in the TPI Board nuetrual
+// The following #defines allow for differences in the TPI Board neutral
 // window voltage.
 //#define NEUTRAL_DEMAND_OUTPUT (1100)    // This allows just above Neutral Window
 //#define NEUTRAL_DEMAND_OUTPUT (1130)    // This allows just below Neutral Window
