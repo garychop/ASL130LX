@@ -15,28 +15,13 @@
 #include "bsp.h"
 #include "AnalogInput.h"
 #include "UserButton.h"
+#include "BluetoothControl.h"
 
 //------------------------------------------------------------------------------
 // Macros and defines
 
 
 #define MAX_DEBOUNCE (8)
-
-#ifdef FUTURE_WORK
-typedef enum {
-    CALIBRATION_BUTTON,
-    USER_PORT_BUTTON,
-    MODE_PORT_BUTTON,
-    MAX_BUTTONS
-} BUTTON_ENUM;
-
-typedef struct {
-    uint16_t m_PortBit;
-    uint8_t m_DebounceCounter;
-    bool  m_ButtonState;
-} BUTTON_STRUCT;
-
-#endif // FUTURE_WORK
 
 //------------------------------------------------------------------------------
 // Local Variables
@@ -51,10 +36,6 @@ static bool g_UserPort_State;
 
 static uint8_t g_ModeButton_DebounceCounter;
 static bool g_ModeButton_State;
-
-static uint8_t g_MouseClick_DebounceCounter;
-static bool g_MouseClick_State;
-static bool g_RightMouseClickEnabled;
 
 //------------------------------------------------------------------------------
 // Forward Prototype Declarations
@@ -80,12 +61,6 @@ void UserButtonInit(void)
     TRISBbits.TRISB5 = GPIO_BIT_INPUT;  // SW2-2
     
 #ifndef DEBUG
-    // Right Click input, shared with PGC
-    TRISBbits.TRISB6 = GPIO_BIT_INPUT;
-    g_MouseClick_DebounceCounter = 0;
-    g_MouseClick_State = PORTBbits.RB6;
-    g_RightMouseClickEnabled = (PORTBbits.RB6 ? false : true);   // If high then RT MOUSE CLICKS are disabled.
-    
     // Setup USER PORT as input.
     // Unfortunately, PIN RB6 is shared with PGD programming pin
     TRISBbits.TRISB7 = GPIO_BIT_INPUT;  // USER PORT
@@ -93,8 +68,6 @@ void UserButtonInit(void)
     g_UserPort_DebounceCounter = 0;
 #else
     g_UserPort_State = true;    // 1=Switch is Open, 0=Switch is closed
-    g_MouseClick_State = true;
-
 #endif    
 }
 
@@ -102,11 +75,7 @@ void UserButtonInit(void)
 // Functions returns true if the Calibration Button is pressed.
 bool IsCalibrationButtonActive (void)
 {
-//#ifndef DEBUG
     return (g_CalButtonState ? false : true);   // Closed is active low.
-//#else
-//    return false;
-//#endif
 }
 
 //------------------------------------------------------------------------------
@@ -167,18 +136,6 @@ bool IsSW2_2_Closed (void)
 
 //------------------------------------------------------------------------------
 
-bool IsMouseClickActive (void)
-{
-    if (g_RightMouseClickEnabled)
-    {
-        return (g_MouseClick_State ? false : true);
-    }
-    else
-        return false;
-}
-
-//------------------------------------------------------------------------------
-
 void Read_User_Buttons (void)
 {
     // Read and debounce the Calibration Button
@@ -235,24 +192,9 @@ void Read_User_Buttons (void)
             g_UserPort_DebounceCounter = 0;
         }
     }
-
-    // Process Mouse Click Port.
-    if (PORTBbits.RB6 == g_MouseClick_State)
-    {
-        // Nothing to do, the signal is stable.
-        g_MouseClick_DebounceCounter = 0;
-    }
-    else
-    {
-        ++g_MouseClick_DebounceCounter;
-        if (g_MouseClick_DebounceCounter > MAX_DEBOUNCE)
-        {
-            g_MouseClick_State = PORTBbits.RB6;
-            g_MouseClick_DebounceCounter = 0;
-        }
-    }
-
+    
 #endif
-   
+    // Read and debounce the Left and Right Click inputs
+    GetMouseClickInputs();
 }
 

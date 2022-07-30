@@ -23,6 +23,19 @@
 #include "BluetoothControl.h"
 
 //------------------------------------------------------------------------------
+// File Global variables.
+
+static uint8_t g_MouseClick_DebounceCounter;
+static bool g_MouseClick_State;
+static bool g_MouseClicksEnabled;
+
+//------------------------------------------------------------------------------
+// Forward Declarations
+void wait10msec (void);
+
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
 // Initialize the pins used during Bluetooth operation.
 //------------------------------------------------------------------------------
 void BluetoothControlInit(void)
@@ -31,19 +44,59 @@ void BluetoothControlInit(void)
     TRISDbits.TRISD3 = GPIO_BIT_OUTPUT;    // D2
     TRISCbits.TRISC2 = GPIO_BIT_OUTPUT;    // D3
     TRISCbits.TRISC1 = GPIO_BIT_OUTPUT;    // D4
-    TRISAbits.TRISA5 = GPIO_BIT_OUTPUT;    // R_CLK_OUT
+    TRISAbits.TRISA5 = GPIO_BIT_OUTPUT;    // LEFT_CLK_OUT
 
     // Set all Bluetooth control lines high
     LATEbits.LATE1 = GPIO_HIGH;      
     LATDbits.LATD3 = GPIO_HIGH;      
     LATCbits.LATC2 = GPIO_HIGH;      
     LATCbits.LATC1 = GPIO_HIGH;      
-    LATAbits.LATA5 = GPIO_HIGH;      
+    LATAbits.LATA5 = GPIO_HIGH;      // Left Click control
+    
+#ifndef DEBUG
+    // Left Click to BT module. This is shared with some debugging pin
+    TRISAbits.TRISA4 = GPIO_BIT_INPUT;
+    
+    // Right Click input, shared with PGC
+    TRISBbits.TRISB6 = GPIO_BIT_INPUT;
+    g_MouseClick_DebounceCounter = 0;
+    g_MouseClick_State = PORTBbits.RB6;
+    g_MouseClicksEnabled = (PORTBbits.RB6 ? true : false);   // If low then RT MOUSE CLICKS are disabled.
+                                    // .. because the input is held low via a single mono
+                                    // .. switch plugged into the Right/Left Mouse Click
+                                    // If no switch is plugged in, this input is high.
+                                    // If a stereo adapter is plugged and both switches
+                                    // .. are open, this input is high and goes low when
+                                    // .. the switch is closed.
+    
+#else
+    g_MouseClick_State = true;
+
+#endif    
+    
 }
 
+//------------------------------------------------------------------------------
+
+void GetMouseClickInputs(void)
+{
+    g_MouseClick_State = PORTBbits.RB6;
+}
+
+//------------------------------------------------------------------------------
+
+bool IsMouseRightClickActive (void)
+{
+    if (g_MouseClicksEnabled)
+    {
+        return (g_MouseClick_State ? false : true);
+    }
+    else
+        return false;
+}
 //-------------------------------------------------------------------------
 
-void SendBlueToothSignal (bool active, BT_DIRECTIONS whichOne)
+void SendBlueToothSignal (BT_DIRECTIONS whichOne, bool active)
 {
     switch (whichOne)
     {
@@ -58,6 +111,14 @@ void SendBlueToothSignal (bool active, BT_DIRECTIONS whichOne)
             break;
         case RIGHT_BT:
             LATCbits.LATC1 = active;
+            break;
+        case LEFT_CLICK_OUT:
+            LATAbits.LATA5 = active;
+            break;
+        case RIGHT_CLICK_OUT:
+#ifndef DEBUG
+            LATAbits.LATA4 = active;
+#endif
             break;
         default:
             break;

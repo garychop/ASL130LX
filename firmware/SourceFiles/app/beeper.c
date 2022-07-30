@@ -20,6 +20,7 @@
 #include <stdbool.h>
 
 // from local
+#include "bsp.h"
 #include "beeper.h"
 
 /* ******************************   Types   ******************************* */
@@ -33,8 +34,7 @@
 void beeperInit(void)
 {
     TRISDbits.TRISD0 = GPIO_BIT_OUTPUT;
-    //TurnBeeper(BEEPER_ON);
-    TurnBeeper(BEEPER_OFF);
+    LATDbits.LATD0 = GPIO_HIGH; // Turn off beeper
 }
 
 //-------------------------------------------------------------------------

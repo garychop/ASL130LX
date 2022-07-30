@@ -27,6 +27,38 @@
                     <name>Debug</name>
                     <type>2</type>
                 </confElem>
+                <confElem>
+                    <name>Release_1115</name>
+                    <type>2</type>
+                </confElem>
+                <confElem>
+                    <name>Release_1100</name>
+                    <type>2</type>
+                </confElem>
+                <confElem>
+                    <name>Release_1108</name>
+                    <type>2</type>
+                </confElem>
+                <confElem>
+                    <name>Release_1120</name>
+                    <type>2</type>
+                </confElem>
+                <confElem>
+                    <name>Release_1122</name>
+                    <type>2</type>
+                </confElem>
+                <confElem>
+                    <name>Release_1130</name>
+                    <type>2</type>
+                </confElem>
+                <confElem>
+                    <name>Release_1118</name>
+                    <type>2</type>
+                </confElem>
+                <confElem>
+                    <name>Release_1119</name>
+                    <type>2</type>
+                </confElem>
             </confList>
             <formatting>
                 <project-formatting-style>false</project-formatting-style>
