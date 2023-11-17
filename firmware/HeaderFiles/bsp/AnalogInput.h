@@ -53,7 +53,8 @@ typedef struct
 extern JOYSTICK_STRUCT Joystick_Data[NUM_JS_POTS];
 
 #define NEUTRAL_JOYSTICK_INPUT (0x202)
-#define NEUTRAL_ERROR_MARGIN (0x40)     // The amount of deviation from the Neutral
+//#define NEUTRAL_ERROR_MARGIN (0x40)     // The amount of deviation from the Neutral
+#define NEUTRAL_ERROR_MARGIN (0x20)     // The amount of deviation from the Neutral
 #define JOYSTICK_RAW_MAX_DEFLECTION (220)   // This is the max that the joystick 
                                         // .. input can deviate from neutral.
 
